@@ -1,81 +1,56 @@
 
-# RL communicating numbers
+# RL-agents communicating numbers using external tools
 
-<img src="sketch_model_v2.png" alt="sketch_model_v2" width="400" /> <img src="model_dynamics_v1.png" alt="model_dynamics_v1"  width="400" />
+Code used for the experiments in 'Self-Communicating Deep Reinforcement Learning AgentsDevelop External Number Representations' (in the revision process).
 
-
-### Overall idea
-
-The idea is to frame the  problem of learning the enumeration procedure as a  communication problem between two agents. The agents  need to communicate about the numerosity of two scenes   they are separately observing, and cooperatively solve a task which requires to compute exactly the number of   objects in the scenes, without being able to see both of them.
+**Purpose**
+Providing a computational framework that allows the investigation of how material representations might support number processing in a deep reinforcementlearning scenario.
 
 ### Environment 
 
-gym-like environment:
+The agent consists of 3 parallel input layers, a 3-layer feed forward neural network, and an output vector that is divided into a verbal output and an
+action output. The action output feeds back to the environment and the input layers.
+
+The three perceptual input layers are binary grids with the same dimensions. In this paper we simulate agents with either 1D or 2D perceptual input layers and periodic boundary conditions. There is a numerosity input layer, a tool input layer and a finger input layer.
+
+The numerosity layer represents the numerosity that needs to be encoded and communicated in order to solve the task presented to the agent. There are two different types of visual input: 
+- Spatially distributed white cells
+- Temporally distributed rectangles appearing on the screen for 1 time step.
+
+The tool layer is the neural network’s visual input from an external tool that the agent can manipulate and use to communicate numerical information.
+One can optionally choose between two tools:
+- unconstrained drawing tool that allows the agent to flip the binary values of a grid cell by outputting the corresponding coordinates
+- an abacus-like tool that allows to move tokens to the left or right
+
+
+The framework is implemented as a gym-like environment:
 env.obs(), env.step(action), env.reset(), env.reward()
 
-Simplest observation: objects represented by binaries:
-
-```
-max_objects = 9
-n_objects = random.randint(1,max_objects)
-dim = 4
-
-obs = np.zeros((dim,dim))
-obs.ravel()[np.random.choice(obs.size, max_objects, replace=False)] = 1
-
-obs:
-array([[0., 0., 0., 1.],
- [1., 0., 0., 1.],
- [0., 0., 0., 0.],
- [1., 0., 0., 0.]])
-```
+### Learning task
+In every experimental setting the goal of the agent is to produce the number word associated with the number of items presented in the numerosity layer.
+In each episode, the environment is initialized with a random visual scene and a default state for the finger and tool layers.
+The agent is then allowed to interact with the environment during subsequent time steps. Each episode ends after 3 time steps for the static setup, and after 3 time steps from the last event for the temporal setup.
+At the final time step of the episode, all layers except for the tool layer are grayed out (uniformly set to values of 0.5).
+This way, the final answer only depends on the current state of the tool, since the agent does not have an internal (e.g., recurrent) memory.
+The task is said to be successfully performed when the agent outputs the correct number word at the last time step.
 
 
+**RL learning algorithm**
+PPO with Clipped Surrogate Objective.
+Uses curriculum learning:  starts  from small numbers and progressively moves to larger numbers.
+Adapted version from: https://github.com/nikhilbarhate99/PPO-PyTorch
 
-Once both agents said 'stop' the scene-channel (physical environment) is replaced by the external representation of the other agent.  
-The external representation has the same dimensions as the scene-channel and is initialized with 0s. 
-
-
-
-### Actions
-- moving left/right/up/down in scene-channel or external repr. depending in which phase of the episode we are  
-- touch/draw: binary at the current position switches from 0 to 1 when external representation is on
-- stop
-- choose 
-- answer
-
-
-
-choose at the same time step as the answer.
-
-(?) Start out with simple action space: touch, stop and choose, answer. --> they will likely start subitizing instead of touching each of the objects?. 
-answer space: two units representing larger/smaller or equal/different.
-
-### NN-Architecture
-
-ConvLSTM, CNN. Input, output dimensions dependent on obs-and action space. 
-Any restrictions on the output? only one action at a time (-->softmax)? Otherwise letting the output freely take values between 0 and 1 e.g. with a sigmoid activation fct.
-
-### RL-algorithm
-
-Start with an rl-algorithm that is simple to implement. E.g. DQL for multi-agents?
-
-
-
-### Task reward
-
-**Start-out: environment contains either 0 or 1 objects (presence/absence):**
-
-Final reward: when answer-action was correct.
-
-What does it mean if one agent fails to answer correctly? wrong repr. of either of the two agents. or perfectly fine representations but wrong inference.
-
-Punishment for action 'choose' before 'stop'. Or having the same node for them. Prefer the second option in the beginning.
-
-
-
-**Later: enviroment can contain multiple objects** 
-
-Final reward: when answer-action was correct.
-
-Intermediate rewards: touching objects (?), no number words.
+**Hyperparameters used for the experiments**
+'''
+eval_every_n_iterations = 100 # Evaluate the model every n iterations
+collect_n_episodes_per_eval = 100 # Collect data every n episodes
+...: 	10 # Number of actors collecting data 'parallely'
+update policy for K epochs  K_epochs = 40 
+eps_clip = 0.2 # clip parameter for PPO  
+Discount Factor: gamma = 0.99 # discount factor  
+c1 = 0.5 # Value Function Coefficient c1
+c2 = 0.05 # Entropy Coefficient 
+  
+lr_actor = 0.0003 # learning rate for actor network  
+lr_critic = 0.001 # learning rate for critic network
+'''
